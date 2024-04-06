@@ -1,6 +1,6 @@
 # Group Name: MarkovMonke
 
-
+#test
 # 2.1a
 def naive_output_probs(training_data_filename):
 
