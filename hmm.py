@@ -24,16 +24,28 @@ def naive_output_probs(training_data_filename):
 
     # read from file
     with open(training_data_filename) as file:
-        for l in file.readlines():
-            if len(l.strip()) != 0:
-                token, tag = l.strip().split("\t")
-                token_tag_count[(token, tag)] = token_tag_count.get((token, tag), 0) + 1
-                tag_count[tag] = tag_count.get(tag, 0) + 1
+        for line in file.readlines():
+            if len(line.strip()) != 0:
+                # stripping off whitespaces and splitting via tab character
+                token, tag = line.strip().split("\t")
 
+                # increment the count of token and tag pair
+                if ((token, tag) in token_tag_count):
+                    token_tag_count[(token, tag)] += 1
+                else:
+                    token_tag_count[(token, tag)] = 1
+                    
+                #increment the count of tag                
+                if (tag in tag_count):
+                    tag_count[tag] += 1
+                else:
+                    tag_count[tag] = 1
+                
                 if token not in tokens:
                     tokens.append(token)
                     num_words += 1
 
+    # smoothed probability of token given tag
     for (token, tag), count in token_tag_count.items():
         token_tag_prob[(token, tag)] = (count + DELTA) / (
             tag_count[tag] + DELTA * (num_words) + 1
@@ -47,26 +59,43 @@ def naive_output_probs(training_data_filename):
 
 # 2.1b
 def naive_predict(in_output_probs_filename, in_test_filename, out_prediction_filename):
-    # Load output probabilities from file
+    # Load output probabilities from file into local variable
     output_probs = {}
     with open(in_output_probs_filename) as f:
         for line in f:
+            # stripping off whitespaces and splitting via tab character
             token, tag, prob = line.strip().split("\t")
             output_probs[(token, tag)] = float(prob)
 
     # Predict tags for test data
     with open(in_test_filename) as f_in, open(out_prediction_filename, "w") as f_out:
         for line in f_in:
+            # stripping off whitespaces
             token = line.strip()
-            if token:  # Non-empty line
+            
+            # Non-empty line
+            if token:
+
+                # initiate max probability with an impossible value
                 max_prob = -1
-                predicted_tag = None
-                for tag in set(tag for (t, tag) in output_probs.keys() if t == token):
+                # initiate predicted tag with an empty string
+                predicted_tag = ""
+
+                # get a distinct list of tags that is paired with token using set()
+                matching_tags = set()
+                for (t, tag) in output_probs.keys():
+                    if t == token:
+                        matching_tags.add(tag)
+                
+                # find tag with highest probabilty 
+                for tag in matching_tags:
                     prob = output_probs.get((token, tag), 0)
                     if prob > max_prob:
                         max_prob = prob
                         predicted_tag = tag
-                if predicted_tag is not None:
+
+                # update output file with predicted tag or UNKOWN
+                if predicted_tag != "":
                     f_out.write(predicted_tag + "\n")
                 else:
                     # Handle case when no tags are found for the token
@@ -81,7 +110,7 @@ def naive_predict(in_output_probs_filename, in_test_filename, out_prediction_fil
 
 # 2.2a
 
-
+'''
 # 2.2b
 def naive_predict2(
     in_output_probs_filename,
@@ -154,7 +183,7 @@ def viterbi_predict2(
 ):
     pass
 
-
+'''
 def evaluate(in_prediction_filename, in_answer_filename):
     """Do not change this method"""
     with open(in_prediction_filename) as fin:
@@ -179,21 +208,21 @@ def run():
     This sequence of code corresponds to the sequence of questions in your project handout.
     """
 
-    ddir = "/Users/jeff/Library/CloudStorage/OneDrive-NationalUniversityofSingapore/Y2S2/BT3102/Group Proj/project_files"  # your working dir
+    # ddir = "/Users/102al/Desktop/Y2/Y2S2/BT3102/Project/3102-hmm-project"  # your working dir
 
     in_train_filename = f"{ddir}/twitter_train.txt"
-    # naive_output_probs(in_train_filename)  ######################################### added this, rmb to remove
+    naive_output_probs(in_train_filename)  ######################################### added this, rmb to remove
     naive_output_probs_filename = f"{ddir}/naive_output_probs.txt"
 
     in_test_filename = f"{ddir}/twitter_dev_no_tag.txt"
     in_ans_filename = f"{ddir}/twitter_dev_ans.txt"
-    # naive_prediction_filename = f"{ddir}/naive_predictions.txt"
-    # naive_predict(
-    #     naive_output_probs_filename, in_test_filename, naive_prediction_filename
-    # ) ######################################### run this first before running evaluate
-    # correct, total, acc = evaluate(naive_prediction_filename, in_ans_filename)
-    # print(f"Naive prediction accuracy:     {correct}/{total} = {acc}")
-
+    naive_prediction_filename = f"{ddir}/naive_predictions.txt"
+    naive_predict(
+        naive_output_probs_filename, in_test_filename, naive_prediction_filename
+    ) ######################################### run this first before running evaluate
+    correct, total, acc = evaluate(naive_prediction_filename, in_ans_filename)
+    print(f"Naive prediction accuracy:     {correct}/{total} = {acc}")
+'''
     naive_prediction_filename2 = f"{ddir}/naive_predictions2.txt"
     naive_predict2(
         naive_output_probs_filename,
@@ -232,7 +261,7 @@ def run():
     # ) ######################################### run this first before running evaluate
     # correct, total, acc = evaluate(viterbi_predictions_filename2, in_ans_filename)
     # print(f"Viterbi2 prediction accuracy:  {correct}/{total} = {acc}")
-
+'''
 
 if __name__ == "__main__":
     run()
