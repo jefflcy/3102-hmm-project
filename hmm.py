@@ -1,10 +1,7 @@
 # Group Name: MarkovMonke
 
 # 2.1a
-def naive_output_probs(training_data_filename):
-
-    # constant for smoothing - need to try: 0.01, 0.1, 1, 10
-    DELTA = 10
+def compute_output_probabilities(training_data_filename, smoothing_delta, output_probs_filename):
 
     # token - tag count
     token_tag_count = {}
@@ -22,7 +19,7 @@ def naive_output_probs(training_data_filename):
     num_words = 0
 
     # read from file
-    with open(training_data_filename, encoding='utf-8') as file:
+    with open(training_data_filename) as file:
         for line in file.readlines():
             if len(line.strip()) != 0:
                 # stripping off whitespaces and splitting via tab character
@@ -46,12 +43,12 @@ def naive_output_probs(training_data_filename):
 
     # smoothed probability of token given tag
     for (token, tag), count in token_tag_count.items():
-        token_tag_prob[(token, tag)] = (count + DELTA) / (
-            tag_count[tag] + DELTA * (num_words) + 1
+        token_tag_prob[(token, tag)] = (count + smoothing_delta) / (
+            tag_count[tag] + smoothing_delta * (num_words) + 1
         )
 
     # write to file
-    with open("naive_output_probs.txt", "w", encoding='utf-8') as file:
+    with open(output_probs_filename, "w") as file:
         for (token, tag), prob in token_tag_prob.items():
             file.write(f"{token}\t{tag}\t{prob}\n")
 
@@ -60,14 +57,14 @@ def naive_output_probs(training_data_filename):
 def naive_predict(in_output_probs_filename, in_test_filename, out_prediction_filename):
     # Load output probabilities from file into local variable
     output_probs = {}
-    with open(in_output_probs_filename, encoding='utf-8') as f:
+    with open(in_output_probs_filename) as f:
         for line in f:
             # stripping off whitespaces and splitting via tab character
             token, tag, prob = line.strip().split("\t")
             output_probs[(token, tag)] = float(prob)
 
     # Predict tags for test data
-    with open(in_test_filename, encoding='utf-8') as f_in, open(out_prediction_filename, "w", encoding='utf-8') as f_out:
+    with open(in_test_filename) as f_in, open(out_prediction_filename, "w") as f_out:
         for line in f_in:
             # stripping off whitespaces
             token = line.strip()
@@ -119,7 +116,7 @@ def naive_predict2(
 ):
     # Load output probabilities from file into local variable
     output_probs = {}
-    with open(in_output_probs_filename, "r", encoding="utf-8") as f:
+    with open(in_output_probs_filename) as f:
         for line in f:
             # stripping off whitespaces and splitting via tab character
             token, tag, prob = line.strip().split("\t")
@@ -129,7 +126,7 @@ def naive_predict2(
     # count total number of tags
     tag_probs = {}
     total_tags = 0
-    with open(in_train_filename, encoding='utf-8') as f:
+    with open(in_train_filename) as f:
         for line in f:
             # stripping off whitespaces
             line = line.strip()
@@ -149,7 +146,7 @@ def naive_predict2(
         tag_probs[tag] /= total_tags
 
     # Predict tags for test data
-    with open(in_test_filename, encoding='utf-8') as f_in, open(out_prediction_filename, "w", encoding='utf-8') as f_out:
+    with open(in_test_filename) as f_in, open(out_prediction_filename, "w") as f_out:
         for line in f_in:
             # stripping off whitespaces
             token = line.strip()
@@ -182,10 +179,59 @@ def naive_predict2(
                 f_out.write("\n")
 
 
-'''
 # 2.2c
+# Naive2 prediction accuracy: 
+
+# 3a
+def compute_transition_probabilities(training_file, smoothing_delta, trans_probs_filename):
+    # transition count
+    transition_count = {}
+
+    # tag count
+    tag_count = {}
+    
+    # Initialize tag_count to account for START tag
+    tag_count['*'] = 0
+
+    with open(training_file) as f:
+        prev_tag = '*'
+        for line in f:
+            line = line.strip()
+            if line:
+                _, tag = line.split('\t')
+
+                # increment the count of transition
+                if ((prev_tag, tag) in transition_count):
+                    transition_count[(prev_tag, tag)] += 1
+                else:
+                    transition_count[(prev_tag, tag)] = 1
+                    
+                #increment the count of tag                
+                if (tag in tag_count):
+                    tag_count[tag] += 1
+                else:
+                    tag_count[tag] = 1
+
+                # update previous tag to be the current tag
+                prev_tag = tag
+            else:  # Empty line (end of tweet)
+                tag_count['*'] += 1  # Increment count for STOP tag
+                prev_tag = '*'  # Reset prev_tag for next tweet
+
+    # calculate transition probabilities
+    num_tags = len(tag_count)
+    for prev_tag in tag_count:
+        for tag in tag_count:
+            transition_count[(prev_tag, tag)] = (transition_count.get((prev_tag, tag), 0) + smoothing_delta) / \
+                                                (tag_count.get(prev_tag, 0) + smoothing_delta * num_tags)
+
+    # Write transition probabilities to file
+    with open(trans_probs_filename, 'w') as f:
+        for (prev_tag, tag), prob in transition_count.items():
+            f.write(f"{prev_tag}\t{tag}\t{prob}\n")
 
 
+# 3b
 def viterbi_predict(
     in_tags_filename,
     in_trans_probs_filename,
@@ -193,13 +239,98 @@ def viterbi_predict(
     in_test_filename,
     out_predictions_filename,
 ):
-    pass
+    # Load tags
+    tags = []
+    with open(in_tags_filename) as f:
+        for line in f:
+            tag = line.strip()
+            tags.append(tag)
+
+    # Load transition probabilities
+    trans_probs = {}
+    with open(in_trans_probs_filename) as f:
+        for line in f:
+            prev_tag, tag, prob = line.strip().split('\t')
+            trans_probs[(prev_tag, tag)] = float(prob)
+
+    # Load output probabilities
+    output_probs = {}
+    with open(in_output_probs_filename) as f:
+        for line in f:
+            token, tag, prob = line.strip().split('\t')
+            output_probs[(token, tag)] = float(prob)
+
+    # Viterbi algorithm
+    with open(in_test_filename) as f_in, open(out_predictions_filename, 'w') as f_out:
+        for line in f_in:
+            tokens = line.strip().split()
+            if tokens:  # Non-empty line
+                n = len(tokens)
+                best_scores = {}
+                back_pointers = {}
+                for tag in tags:
+                    # Initialization
+                    best_scores[(0, tag)] = trans_probs.get(('*', tag), 0) * output_probs.get((tokens[0], tag), 0)
+                    back_pointers[(0, tag)] = ""
+
+                for i in range(1, n):
+                    for tag in tags:                            
 
 
-# 2.2c
-# Naive2 prediction accuracy:
+                        # loop to get highest probability with corressponding tag                        
+                        check = []
+                        for prev_tag in tags:
+                            score =  best_scores[(i - 1, prev_tag)] \
+                                            * trans_probs.get((prev_tag, tag), 0) \
+                                            * output_probs.get((tokens[i], tag), 0)
+                            check.append((score, prev_tag))
+                        best_score, back_pointer = max(check)
+
+                        # best_score, back_pointer = max(
+                        #     ((best_scores[(i - 1, prev_tag)] * trans_probs.get((prev_tag, tag), 0) *
+                        #       output_probs.get((tokens[i], tag), 0), prev_tag) for prev_tag in tags)
+                        # )
 
 
+                        best_scores[(i, tag)] = best_score
+                        back_pointers[(i, tag)] = back_pointer
+
+                # Find the best final tag
+                best_final_tag = max(tags, key=lambda tag: best_scores[(n - 1, tag)])
+
+                # Trace back to find the best tag sequence
+                predicted_tags = [best_final_tag]
+                prev_tag = best_final_tag
+                for i in range(n - 1, 0, -1):
+                    prev_tag = back_pointers[(i, prev_tag)]
+                    predicted_tags.insert(0, prev_tag)
+
+                # Write predicted tags to output file
+                for token, tag in zip(tokens, predicted_tags):
+                    f_out.write(tag + '\n')
+            else:  # Empty line (end of tweet)
+                f_out.write('\n')
+
+# 3c
+# Viterbi prediction accuracy: 68.87%
+
+
+# 4a
+def preprocess_data(training_file, processed_training_file):
+    with open(training_file) as f_in, open(processed_training_file, "w") as f_out:
+        for line in f_in:
+            token, tag = line.strip().split('\t')
+            processed_token = ""
+            if (not token.startswith('@')) and token != '-':
+                processed_token = token.lower()
+            else:
+                processed_token = token
+            
+            processed_line = processed_token + '\t' + tag
+            f_out.write(processed_line + '\n')
+
+
+# 4b
 def viterbi_predict2(
     in_tags_filename,
     in_trans_probs_filename,
@@ -207,9 +338,78 @@ def viterbi_predict2(
     in_test_filename,
     out_predictions_filename,
 ):
-    pass
+    # Load tags
+    tags = []
+    with open(in_tags_filename) as f:
+        for line in f:
+            tag = line.strip()
+            tags.append(tag)
 
-'''
+    # Load transition probabilities
+    trans_probs = {}
+    with open(in_trans_probs_filename) as f:
+        for line in f:
+            prev_tag, tag, prob = line.strip().split('\t')
+            trans_probs[(prev_tag, tag)] = float(prob)
+
+    # Load output probabilities
+    output_probs = {}
+    with open(in_output_probs_filename) as f:
+        for line in f:
+            token, tag, prob = line.strip().split('\t')
+            output_probs[(token, tag)] = float(prob)
+
+    # Viterbi algorithm
+    with open(in_test_filename) as f_in, open(out_predictions_filename, 'w') as f_out:
+        for line in f_in:
+            tokens = line.strip().split()
+            if tokens:  # Non-empty line
+                n = len(tokens)
+                best_scores = {}
+                back_pointers = {}
+                for tag in tags:
+                    # Initialization
+                    best_scores[(0, tag)] = trans_probs.get(('*', tag), 0) * output_probs.get((tokens[0], tag), 0)
+                    back_pointers[(0, tag)] = ""
+
+                for i in range(1, n):
+                    for tag in tags:                            
+
+
+                        # loop to get highest probability with corressponding tag                        
+                        check = []
+                        for prev_tag in tags:
+                            score =  best_scores[(i - 1, prev_tag)] \
+                                            * trans_probs.get((prev_tag, tag), 0) \
+                                            * output_probs.get((tokens[i], tag), 0)
+                            check.append((score, prev_tag))
+                        best_score, back_pointer = max(check)
+
+                        # best_score, back_pointer = max(
+                        #     ((best_scores[(i - 1, prev_tag)] * trans_probs.get((prev_tag, tag), 0) *
+                        #       output_probs.get((tokens[i], tag), 0), prev_tag) for prev_tag in tags)
+                        # )
+
+
+                        best_scores[(i, tag)] = best_score
+                        back_pointers[(i, tag)] = back_pointer
+
+                # Find the best final tag
+                best_final_tag = max(tags, key=lambda tag: best_scores[(n - 1, tag)])
+
+                # Trace back to find the best tag sequence
+                predicted_tags = [best_final_tag]
+                prev_tag = best_final_tag
+                for i in range(n - 1, 0, -1):
+                    prev_tag = back_pointers[(i, prev_tag)]
+                    predicted_tags.insert(0, prev_tag)
+
+                # Write predicted tags to output file
+                for token, tag in zip(tokens, predicted_tags):
+                    f_out.write(tag + '\n')
+            else:  # Empty line (end of tweet)
+                f_out.write('\n')
+
 def evaluate(in_prediction_filename, in_answer_filename):
     """Do not change this method"""
     with open(in_prediction_filename) as fin:
@@ -237,7 +437,7 @@ def run():
     ddir = "/Users/102al/Desktop/Y2/Y2S2/BT3102/Project/3102-hmm-project"  # your working dir
 
     in_train_filename = f"{ddir}/twitter_train.txt"
-    naive_output_probs(in_train_filename)  ######################################### added this, rmb to remove
+    # naive_output_probs(in_train_filename)  ######################################### added this, rmb to remove
     naive_output_probs_filename = f"{ddir}/naive_output_probs.txt"
 
     in_test_filename = f"{ddir}/twitter_dev_no_tag.txt"
